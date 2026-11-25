@@ -11,6 +11,29 @@ const ruleTester = new RuleTester({
 
 ruleTester.run('prefer-ending-with-an-expect', rule, {
   valid: [
+    dedent`
+      it('checks the expected values', () => {
+        const expected = [1, 2];
+        for (const value of expected) expect(actual).toContain(value);
+      });
+    `,
+    dedent`
+      it('checks the expected values', () => {
+        for (const value of [1, ...expected]) {
+          expect(actual).toContain(value);
+        }
+      });
+    `,
+    {
+      code: dedent`
+        it('checks the expected values', async () => {
+          for (const value of [1, 2]) {
+            await expect(find(value)).resolves.toBeDefined();
+          }
+        });
+      `,
+      parserOptions: { ecmaVersion: 2017 },
+    },
     'it.todo("will test something eventually")',
     'test.todo("will test something eventually")',
     "['x']();",
@@ -166,6 +189,64 @@ ruleTester.run('prefer-ending-with-an-expect', rule, {
     },
   ],
   invalid: [
+    {
+      code: 'it("checks values", () => { for (const value of []) expect(value); });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: 'it("checks values", () => { for (const value of [...values]) expect(value); });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: 'it("checks values", () => { for (const value of getValues()) expect(value); });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: 'it("checks values", () => { for (const value of values) expect(value); });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: 'it("checks values", () => { let values = [1]; for (const value of values) expect(value); });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: 'it("checks values", () => { const [values] = [[]]; for (const value of values) expect(value); });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: dedent`
+        const values = [1];
+        it('checks values', () => {
+          for (const value of values) expect(value);
+        });
+      `,
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: dedent`
+        it('checks values', () => {
+          const values = [1];
+          values.pop();
+          for (const value of values) expect(value);
+        });
+      `,
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: 'it("checks values", () => { for (const value of [1]) { break; } });',
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
+    {
+      code: dedent`
+        it('checks values', () => {
+          for (const value of [1]) {
+            if (skip) continue;
+            expect(value);
+          }
+        });
+      `,
+      errors: [{ messageId: 'mustEndWithExpect' }],
+    },
     {
       code: 'it("should fail", () => {});',
       errors: [

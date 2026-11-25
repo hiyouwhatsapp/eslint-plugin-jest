@@ -9,7 +9,11 @@ Prefer ending tests with an `expect` assertion.
 ## Rule details
 
 This rule triggers when a test body does not end with an `expect` call, which
-can indicate an unfinished test.
+can indicate an unfinished test. A final `for...of` loop also counts when its
+body is a single assertion and it iterates over a visibly non-empty array
+literal. The array can be assigned to a `const` in the same block if that loop
+is its only use. An empty array or an iterable that might be empty does not
+count.
 
 Examples of **incorrect** code for this rule:
 
@@ -41,6 +45,16 @@ it('lets me change the selected option', () => {
 
   expect(container.toHTML()).not.toContain('<option value="1" selected>');
   expect(container.toHTML()).toContain('<option value="2" selected>');
+});
+```
+
+```js
+it('includes the expected values', () => {
+  const expected = [1, 2];
+
+  for (const value of expected) {
+    expect(actual).toContain(value);
+  }
 });
 ```
 

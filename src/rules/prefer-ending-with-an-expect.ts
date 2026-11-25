@@ -3,7 +3,12 @@
  * MIT license, Remco Haszing.
  */
 
-import { AST_NODE_TYPES, type TSESTree } from '@typescript-eslint/utils';
+import {
+  ASTUtils,
+  AST_NODE_TYPES,
+  type TSESLint,
+  type TSESTree,
+} from '@typescript-eslint/utils';
 import {
   type FunctionExpression,
   createRule,
@@ -56,6 +61,46 @@ function getLastStatement(fn: FunctionExpression): TSESTree.Node | null {
   }
 
   return fn.body;
+}
+
+function isNonEmptyArrayLiteral(node: TSESTree.Expression | null): boolean {
+  return (
+    node?.type === AST_NODE_TYPES.ArrayExpression &&
+    node.elements.some(
+      element => element?.type !== AST_NODE_TYPES.SpreadElement,
+    )
+  );
+}
+
+function hasNonEmptyArray(
+  loop: TSESTree.ForOfStatement,
+  scope: TSESLint.Scope.Scope,
+): boolean {
+  const { right } = loop;
+
+  if (right.type !== AST_NODE_TYPES.Identifier) {
+    return isNonEmptyArrayLiteral(right);
+  }
+
+  const variable = ASTUtils.findVariable(scope, right);
+
+  if (!variable) {
+    return false;
+  }
+
+  const [definition] = variable.defs;
+
+  return (
+    definition?.type === 'Variable' &&
+    definition.parent.kind === 'const' &&
+    definition.parent.parent === loop.parent &&
+    definition.node.id.type === AST_NODE_TYPES.Identifier &&
+    isNonEmptyArrayLiteral(definition.node.init) &&
+    // Other references could mutate the array or let it escape.
+    variable.references.every(
+      reference => reference.init || reference.identifier === right,
+    )
+  );
 }
 
 export default createRule<
@@ -119,6 +164,25 @@ export default createRule<
         }
 
         let lastStatement = getLastStatement(node.arguments[1]);
+
+        if (
+          lastStatement?.type === AST_NODE_TYPES.ForOfStatement &&
+          hasNonEmptyArray(
+            lastStatement,
+            context.sourceCode.getScope(lastStatement.right),
+          )
+        ) {
+          const { body } = lastStatement;
+          const statement =
+            body.type === AST_NODE_TYPES.BlockStatement &&
+            body.body.length === 1
+              ? body.body[0]
+              : body;
+
+          if (statement.type === AST_NODE_TYPES.ExpressionStatement) {
+            lastStatement = statement.expression;
+          }
+        }
 
         if (lastStatement?.type === AST_NODE_TYPES.AwaitExpression) {
           lastStatement = lastStatement.argument;
